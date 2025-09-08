@@ -151,73 +151,57 @@ const App = () => {
         .map(c => `${c.name || c.namePlaceholder} (${c.desc || c.descPlaceholder})`)
         .join(', ');
 
-    const basePrompt = `A whimsical, colorful children's storybook illustration in a cute cartoon style. The characters are: ${characterDescriptions}. The scene depicts: ${scene.text}`;
+    const basePrompt = `A whimsical, colorful children's storybook illustration in a cute cartoon style, with an aspect ratio of 16:9. The characters are: ${characterDescriptions}. The scene depicts: ${scene.text}`;
 
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         let imageUrl: string | undefined;
 
-        if (sceneIndex === 0) {
-            // Generate the first image from text
-            const response = await ai.models.generateImages({
-                model: 'imagen-4.0-generate-001',
-                prompt: basePrompt,
-                config: {
-                    numberOfImages: 1,
-                    outputMimeType: 'image/png',
-                    aspectRatio: '16:9',
+        const base64FromDataUrl = (dataUrl: string) => dataUrl.split(',')[1];
+        
+        const parts: any[] = [{ text: basePrompt }];
+
+        // Add previous image(s) as input for consistency
+        const image1Url = storyScenes[0]?.imageUrl;
+        if (image1Url) {
+            parts.unshift({
+                inlineData: {
+                    data: base64FromDataUrl(image1Url),
+                    mimeType: 'image/png',
                 },
             });
+        }
 
-            const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-            imageUrl = `data:image/png;base64,${base64ImageBytes}`;
-        } else {
-            // Generate subsequent images based on previous ones for consistency
-            const base64FromDataUrl = (dataUrl: string) => dataUrl.split(',')[1];
-            
-            const parts: any[] = [{ text: basePrompt }];
-
-            // Add previous image(s) as input
-            const image1Url = storyScenes[0]?.imageUrl;
-            if (image1Url) {
-                parts.unshift({
+        // For the third scene, also add the second image
+        if (sceneIndex === 2) {
+            const image2Url = storyScenes[1]?.imageUrl;
+            if (image2Url) {
+                parts.splice(1, 0, { // Insert at index 1, after image 1
                     inlineData: {
-                        data: base64FromDataUrl(image1Url),
+                        data: base64FromDataUrl(image2Url),
                         mimeType: 'image/png',
                     },
                 });
             }
-
-            if (sceneIndex === 2) {
-                const image2Url = storyScenes[1]?.imageUrl;
-                if (image2Url) {
-                    parts.splice(1, 0, { // Insert at index 1, after image 1
-                        inlineData: {
-                            data: base64FromDataUrl(image2Url),
-                            mimeType: 'image/png',
-                        },
-                    });
-                }
+        }
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: { parts },
+            config: {
+                responseModalities: [Modality.IMAGE, Modality.TEXT],
+            },
+        });
+        
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+                break; // Found the image, exit loop
             }
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
-                contents: { parts },
-                config: {
-                    responseModalities: [Modality.IMAGE, Modality.TEXT],
-                },
-            });
-            
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    const base64ImageBytes: string = part.inlineData.data;
-                    imageUrl = `data:image/png;base64,${base64ImageBytes}`;
-                    break; // Found the image, exit loop
-                }
-            }
-            if (!imageUrl) {
-                throw new Error("Model did not return an image.");
-            }
+        }
+        if (!imageUrl) {
+            throw new Error("Model did not return an image.");
         }
         
         setStoryScenes(prev => prev.map((s, i) => 

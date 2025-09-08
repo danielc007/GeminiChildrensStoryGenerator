@@ -16,6 +16,5 @@ View your app in AI Studio: https://ai.studio/apps/drive/1YmegC_gKESt2KfjNi5bKZ_
 1. Install dependencies:
    `npm install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Set the `ELEVENLABS_API_KEY` in [.env.local](.env.local) to your Elevenlabs API key
-4. Run the app:
+3. Run the app:
    `npm run dev`
